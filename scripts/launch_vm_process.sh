@@ -1,21 +1,21 @@
 #!/bin/bash
 
 # define some constants
-MAXMEM=16384
-MINCPU=1
-MAXCPU=32
 PROGRAMNAME=$0
 SHUTDOWN_TIMEOUT=60
 SSHUSER='dummy'
 
-# define dummy cmd
-cmd0="cat /sys/devices/system/cpu/present"
-cmd1="cat /sys/devices/system/cpu/present"
+# define default values
+cmd="cat /sys/devices/system/cpu/present"
+guestmem=16384
+vcpus=8
 
 function usage {
-    echo "usage: $PROGRAMNAME  [--vm0/1] [--cmd0/1] [-h]"
-    echo "	--vm0/1		name of VM 0/1"
-    echo "	--cmd0/1	command to be executed on VM 0/1"
+    echo "usage: $PROGRAMNAME  --vm [--cmd] [--vcpus] [--guestmem] [-h]"
+    echo "	--vm		name of the VM"
+    echo "	--vcpus		VCPU count"
+    echo "	--cmd		command to be executed"
+    echo "	--guestmem	guest physical memory in MiB"
     echo "	-h/--help	display help"
     exit 1
 }
@@ -38,15 +38,19 @@ function start_domain () {
 	domain=$1
 
 	# start domain
+	echo -n "Starting '$domain' ... "
 	virsh start $domain > /dev/null
+	echo "done"
 	
 	# wait until online
+	echo -n "Wait until '$domain' reachable ... "
 	while ! nc -z $domain 22; do
 		sleep 1
 	done
 	
 	# be sure domain is online
 	sleep 1
+	echo "done"
 }
 
 function stop_domain () {
@@ -56,10 +60,9 @@ function stop_domain () {
 	running_domains=`list_running_domains`
 
 	# Try to shutdown given domain.
+	echo -n "Shutdown '$domain'  ... "
 	if vm_running $domain; then
 		virsh shutdown $domain > /dev/null
-	else
-		return
 	fi
 
 	# Wait until domain is shut off
@@ -71,13 +74,28 @@ function stop_domain () {
 	
 	# be sure domain is offline
 	sleep 1
+	echo "done"
 }
 
 function set_vcpu () {
 	domain=$1
 	cpucount=$2
-
+	
+	echo -n "Set vcpus to '$cpucount' ... "
 	virsh setvcpus $domain --config --count $cpucount > /dev/null
+	echo "done"
+}
+
+function set_guestmem () {
+	domain=$1
+	guestmem=$2
+	echo $guestmem
+	let "guestmem *= 1024"
+	
+	echo -n "Set guestmem to '$(($guestmem/1024)) MiB' ... "
+	virsh setmaxmem $domain --config $guestmem > /dev/null
+	virsh setmem $domain --config $guestmem > /dev/null
+	echo "done"
 }
 
 function pin_vcpu () {
@@ -85,18 +103,23 @@ function pin_vcpu () {
 	maxvcpu=$[$2-1]
 
 	# perform a 1-to-1 pinning
+	echo -n "Perform 1-to-1 pinning of VCPUs ... "
 	for cpu in `seq 0 $maxvcpu`; do
 		virsh vcpupin $domain --live $cpu $cpu > /dev/null
 	done
+	echo "done"
 }
 
 function exec_cmd() {
-	ssh $SSHUSER@$1 $2
+	domain=$1
+	cmd=$2
+	echo "Executing '$cmd' ..."
+	ssh $SSHUSER@$domain $cmd
 }
 
 # determine options
 vm_count=0
-if ! options=$(getopt -o h -l help,vm0:,vm1:,cmd0:,cmd1: -- "$@")
+if ! options=$(getopt -o h -l help,vm:,cmd:,mem:,vcpu: -- "$@")
 then
     exit 1
 fi
@@ -107,22 +130,20 @@ while [ $# -gt 0 ]; do
 		usage
 		exit
 		;;
-	--vm0)
-		vm_count=$[$vm_count+1]
-		vm0="$2"
+	--vm)
+		vm="$2"
 		shift
 		;;
-	--vm1) 
-		vm_count=$[$vm_count+1]
-		vm1="$2"
+	--cmd) 
+		cmd="$2"
 		shift
 		;;
-	--cmd0) 
-		cmd0="$2"
+	--vcpus) 
+		vcpus="$2"
 		shift
 		;;
-	--cmd1) 
-		cmd1="$2"
+	--guestmem) 
+		guestmem="$2"
 		shift
 		;;
 	(--) shift; break;;
@@ -132,42 +153,21 @@ while [ $# -gt 0 ]; do
 	shift
 done
 
+# check parameters
+if [ -z ${vm+1} ]; then
+	echo "ERROR: You have to specify at least the VM you want to use. Abort!"
+	exit
+fi
+
 # ensure *all* VMs are shut off
 for vm in `list_running_domains`; do
-	echo -n "Shutting down '$vm' ... "
 	stop_domain $vm
-	echo "done"
 done
 
-# use one VM only
-function one_process() {
-	domain=$1
-	cmd=$2
-
-	for cpucount in `seq $MINCPU $MAXCPU`; do
-		set_vcpu $domain $cpucount
-		start_domain $domain
-		pin_vcpu $domain $cpucount
-		exec_cmd $domain $cmd
-		stop_domain $domain
-	done 
-}
-
-
-
-# start benchmark in accordance with VM count
-case $vm_count in 
-	1)
-		if [[ $vm0 ]]; then
-			one_process $vm0 $cmd0
-		else 
-			one_process $vm1 $cmd0
-		fi
-		;;
-	2)
-		echo "Starting two processes ..."
-		;;
-	*)
-		echo "ERROR: You need to specify at least one VM. Abort!"
-		;;
-esac
+# prepare the VM
+set_vcpu $vm $vcpus
+set_guestmem $vm $guestmem
+start_domain $vm
+pin_vcpu $vm $vcpus
+exec_cmd $vm "$cmd"
+stop_domain $vm
