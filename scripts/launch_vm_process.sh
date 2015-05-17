@@ -119,7 +119,7 @@ function exec_cmd() {
 
 # determine options
 vm_count=0
-if ! options=$(getopt -o h -l help,vm:,cmd:,mem:,vcpu: -- "$@")
+if ! options=$(getopt -o h -l help,vm:,cmd:,mem:,vcpus: -- "$@")
 then
     exit 1
 fi
