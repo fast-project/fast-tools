@@ -7,6 +7,7 @@ SSHUSER='dummy'
 
 # define default values
 cmd="cat /sys/devices/system/cpu/present"
+pinning="0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31"
 guestmem=16384
 vcpus=8
 
@@ -14,6 +15,7 @@ function usage {
     echo "usage: $PROGRAMNAME  --vm [--cmd] [--vcpus] [--guestmem] [-h]"
     echo "	--vm		name of the VM"
     echo "	--vcpus		VCPU count"
+    echo "	--pinning	comma separated list of host CPUs for the pinning"
     echo "	--cmd		command to be executed"
     echo "	--guestmem	guest physical memory in MiB"
     echo "	-h/--help	display help"
@@ -101,11 +103,18 @@ function set_guestmem () {
 function pin_vcpu () {
 	domain=$1
 	maxvcpu=$[$2-1]
+	pinning=$3
 
+	# extract array from pinning string
+	pinning=${pinning//,/ }
+	pinningAry=($pinning)
+	pinningAryLength=${#pinningAry[@]}
+	
 	# perform a 1-to-1 pinning
 	echo -n "Perform 1-to-1 pinning of VCPUs ... "
 	for cpu in `seq 0 $maxvcpu`; do
-		virsh vcpupin $domain --live $cpu $cpu > /dev/null
+		aryPos=$((cpu % pinningAryLength))
+		virsh vcpupin $domain --live $cpu ${pinningAry[$aryPos]} > /dev/null
 	done
 	echo "done"
 }
@@ -119,7 +128,7 @@ function exec_cmd() {
 
 # determine options
 vm_count=0
-if ! options=$(getopt -o h -l help,vm:,cmd:,guestmem:,vcpus: -- "$@")
+if ! options=$(getopt -o h -l help,vm:,cmd:,guestmem:,vcpus:,pinning: -- "$@")
 then
     exit 1
 fi
@@ -140,6 +149,10 @@ while [ $# -gt 0 ]; do
 		;;
 	--vcpus) 
 		vcpus="$2"
+		shift
+		;;
+	--pinning) 
+		pinning="$2"
 		shift
 		;;
 	--guestmem) 
@@ -171,7 +184,7 @@ set_guestmem $vm $guestmem
 
 # start the VM and perform pinning
 start_domain $vm
-pin_vcpu $vm $vcpus
+pin_vcpu $vm $vcpus $pinning
 
 # start benchmark
 exec_cmd $vm "$cmd"
