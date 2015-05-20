@@ -160,14 +160,21 @@ if [ -z ${vm+1} ]; then
 fi
 
 # ensure *all* VMs are shut off
-for vm in `list_running_domains`; do
-	stop_domain $vm
-done
+#for vm in `list_running_domains`; do
+#	stop_domain $vm
+#done
 
 # prepare the VM
+stop_domain $vm
 set_vcpu $vm $vcpus
 set_guestmem $vm $guestmem
+
+# start the VM and perform pinning
 start_domain $vm
 pin_vcpu $vm $vcpus
+
+# start benchmark
 exec_cmd $vm "$cmd"
+
+# stop benchmark
 stop_domain $vm
