@@ -114,8 +114,9 @@ function pin_vcpu () {
 	echo -n "Perform 1-to-1 pinning of VCPUs ... "
 	for cpu in `seq 0 $maxvcpu`; do
 		aryPos=$((cpu % pinningAryLength))
-		virsh vcpupin $domain --live $cpu ${pinningAry[$aryPos]} > /dev/null
+		virsh vcpupin $domain --config $cpu ${pinningAry[$aryPos]} > /dev/null
 	done
+	virsh emulatorpin $domain --config ${pinningAry[0]}-${pinningAry[$maxvcpu]} > /dev/null
 	echo "done"
 }
 
@@ -181,10 +182,10 @@ fi
 stop_domain $vm
 set_vcpu $vm $vcpus
 set_guestmem $vm $guestmem
+pin_vcpu $vm $vcpus $pinning
 
 # start the VM and perform pinning
 start_domain $vm
-pin_vcpu $vm $vcpus $pinning
 
 # start benchmark
 exec_cmd $vm "$cmd"
