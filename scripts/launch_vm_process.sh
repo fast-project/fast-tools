@@ -180,15 +180,17 @@ fi
 
 # prepare the VM
 stop_domain $vm
-set_vcpu $vm $vcpus
-set_guestmem $vm $guestmem
-pin_vcpu $vm $vcpus $pinning
+#set_guestmem $vm $guestmem
+#set_vcpu $vm $vcpus
+#pin_vcpu $vm $vcpus $pinning
+./set_host_topology.rb --domain=$vm --cpus=$pinning --output=${vm}_newdef.xml --memory=$guestmem
+exit
 
 # start the VM and perform pinning
 start_domain $vm
 
 # start benchmark
-exec_cmd $vm "$cmd"
-
-# stop benchmark
-stop_domain $vm
+#exec_cmd $vm "$cmd"
+#
+## stop benchmark
+#stop_domain $vm

@@ -87,6 +87,13 @@ class Domain
     cputune.add_child(Nokogiri::XML::Text.new last_text_content, @xml)
   end
 
+  def set_memory(memory)
+    ['memory','currentMemory'].each do |nodeName|
+    	node = @xml.at_css(nodeName)
+  	node.content = (memory/1024).to_i
+    end
+  end
+
   def adapt_host_topology(host)
     determine_sockets(host)
 
@@ -161,6 +168,10 @@ OptionParser.new do |opts|
     options[:cpus] = c
   end
 
+  opts.on("-mMEMORY", "--memory=MEMORY", :required, "Amount of memory assigned to the VM") do |m|
+    options[:memory] = m.to_i
+  end
+
   opts.on("-oOUTPUT", "--output=OUTPUT", String, :required, "Filename of the new domain definition") do |o|
     options[:output] = o
   end
@@ -186,6 +197,7 @@ IO.popen("virsh capabilities", "r+") do |pipe|
 end
 host = Host.new(xml_str)
 
+domain.set_memory(options[:memory])
 domain.set_vcpus(options[:cpus].length)
 domain.pin_vcpus(options[:cpus])
 domain.adapt_host_topology(host)
