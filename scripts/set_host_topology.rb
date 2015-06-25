@@ -3,15 +3,61 @@
 require 'nokogiri'
 require 'optparse'
 
+HT_ORDER=2
+
+class Host
+  attr_accessor :cells
+
+  def initialize(xml_str=nil)
+    @xml = Nokogiri::XML(xml_str) unless xml_str == nil
+    extract_topology
+  end
+
+  private
+  def extract_topology
+    @cells = []
+    @xml.css('cpus').each do |cell|
+      cur_cell = []
+      cell.children.each do |cpu|
+        cur_cell << cpu.attributes['id'].to_s.to_i if cpu.attributes['id'].instance_of?(Nokogiri::XML::Attr)
+      end
+      @cells << cur_cell
+    end
+  end
+end
+
+class Memory
+  attr_reader :unit, :size
+
+  def initialize(memory_node)
+    @unit = memory_node['unit']
+    @size = memory_node.content.to_i
+  end
+end
+
+class Vcpu
+  attr_reader :id
+  attr_reader :phys_cpu
+  attr_accessor :socket
+
+  def initialize(id, phys_cpu)
+    @id = id.to_i
+    @phys_cpu = phys_cpu.to_i
+    @sibling = nil
+    @socket = nil
+  end
+end
+
 class Domain
   attr_reader :xml
 
   def initialize(xml_str=nil)
     @xml = Nokogiri::XML(xml_str) unless xml_str == nil
+    @vcpus = []
   end
 
-  def to_string
-    @xml.to_xml
+  def to_s
+    @xml.to_xml(:save_with => Nokogiri::XML::Node::SaveOptions::AS_XML).sub("\n", "").strip
   end
 
   def set_vcpus(vcpu_count)
@@ -21,18 +67,83 @@ class Domain
   end
   
   def pin_vcpus(cpus)
+    # retrieve relevant XML part 
     cputune = @xml.at_css("cputune")
     text_content=cputune.children.first.content
     last_text_content=cputune.children.last.content
     cputune.children.remove
-    cpus.each_with_index do |cpu, index|
+
+    # create VCPUs
+    map_vcpus(cpus)
+
+    # update XML
+    @vcpus.each do |vcpu|
       cputune.add_child(Nokogiri::XML::Text.new text_content, @xml)
       child = Nokogiri::XML::Node.new('vcpupin', @xml)
-      child['vcpu'] = "#{index}"
-      child['cpuset'] = "#{cpu}"
+      child['vcpu'] = "#{vcpu.id}"
+      child['cpuset'] = "#{vcpu.phys_cpu}"
       cputune.add_child(child)
     end
     cputune.add_child(Nokogiri::XML::Text.new last_text_content, @xml)
+  end
+
+  def adapt_host_topology(host)
+    determine_sockets(host)
+
+    # get Domain's memory info
+    memory = Memory.new(@xml.at_css('memory'))
+
+    # create <numa> node from XML
+    numa = Nokogiri::XML::Node.new('numa', @xml)
+    @cells.each_with_index do |cell, index|
+      new_cell = Nokogiri::XML::Node.new('cell', @xml)
+      new_cell['id'] = index.to_s 
+      new_cell['cpus'] = cell.join(",")
+      new_cell['memory'] = (memory.size/@cells.length).to_i
+      new_cell['unit'] = memory.unit
+      numa.add_child(new_cell)
+    end 
+
+    # create <topology> node
+    topology = Nokogiri::XML::Node.new('topology', @xml)
+    topology['sockets'] = @cells.length.to_s
+    topology['cores'] = @cells.max_by(&:length).length
+    topology['threads'] = HT_ORDER
+
+    # remove old nodes
+    @xml.css("numa").remove
+    @xml.css("topology").remove
+
+    # add <numa> and <topology> node to <cpu> node
+    cpu = @xml.at_css("cpu")
+    cpu.add_child(numa)
+    cpu.add_child(topology)
+  end
+
+  private
+  def map_vcpus(cpus)
+    cpus.each_with_index do |cpu, index|
+      @vcpus << Vcpu.new(index, cpu)
+    end
+  end
+
+  def determine_sockets(host)
+    # assign socket to VCPUs
+    @vcpus.each do |vcpu|
+      host.cells.each_with_index do |cell, index|
+        if (cell.include?(vcpu.phys_cpu)) then
+          vcpu.socket = index
+          break
+        end
+      end
+    end
+
+    # define cells
+    @cells = []
+    host.cells.each_with_index do |cell, index|
+      cur_socket = @vcpus.select { |vcpu| vcpu.socket == index }.map { |vcpu| vcpu.id }
+      @cells << cur_socket unless cur_socket.empty?
+    end
   end
 end
 
@@ -61,19 +172,27 @@ if (options[:domain] == nil) then
 end
 
 
-# retrieve the current XML definition
+# retrieve the current XML definition and create domain
 xml_str=''
 IO.popen("virsh dumpxml #{options[:domain]}", "r+") do |pipe|
   pipe.close_write
   xml_str=pipe.read
 end
-
-# create new domain from xml-string
 domain = Domain.new(xml_str)
+
+IO.popen("virsh capabilities", "r+") do |pipe|
+  pipe.close_write
+  xml_str=pipe.read
+end
+host = Host.new(xml_str)
 
 domain.set_vcpus(options[:cpus].length)
 domain.pin_vcpus(options[:cpus])
+domain.adapt_host_topology(host)
 
-File.write(options[:output], domain.to_string) unless options[:output] == nil
-
+if (options[:output]) 
+  File.write(options[:output], domain.to_s)
+else
+  puts domain.to_s
+end
 
