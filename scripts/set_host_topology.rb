@@ -90,7 +90,7 @@ class Domain
   def set_memory(memory)
     ['memory','currentMemory'].each do |nodeName|
     	node = @xml.at_css(nodeName)
-  	node.content = (memory/1024).to_i
+  	node.content = (memory*1024).to_i
     end
   end
 
