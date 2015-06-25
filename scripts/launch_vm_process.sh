@@ -184,7 +184,7 @@ stop_domain $vm
 #set_vcpu $vm $vcpus
 #pin_vcpu $vm $vcpus $pinning
 ./set_host_topology.rb --domain=$vm --cpus=$pinning --output=${vm}_newdef.xml --memory=$guestmem
-exit
+virsh define ${vm}_newdef.xml && rm ${vm}_newdef.xml
 
 # start the VM and perform pinning
 start_domain $vm
