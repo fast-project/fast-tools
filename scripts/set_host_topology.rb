@@ -160,28 +160,28 @@ options = {}
 OptionParser.new do |opts|
   opts.banner = "Usage: #{__FILE__} [options]"
 
-  opts.on("-dDOMAIN", "--domain=DOMAIN", String, :required, "Name of the libvirt domain to be modified") do |d|
+  opts.on("-dDOMAIN", "--domain=DOMAIN", String, "Name of the libvirt domain to be modified") do |d|
     options[:domain] = d
   end
 
-  opts.on("-cCPUs", "--cpus=x,y", Array, :required, "A list of physical CPUs assigned to the VM") do |c|
+  opts.on("-cCPUs", "--cpus=x,y", Array, "A list of physical CPUs assigned to the VM") do |c|
     options[:cpus] = c
   end
 
-  opts.on("-mMEMORY", "--memory=MEMORY", :required, "Amount of memory assigned to the VM") do |m|
+  opts.on("-mMEMORY", "--memory=MEMORY", "Amount of memory assigned to the VM") do |m|
     options[:memory] = m.to_i
   end
 
-  opts.on("-oOUTPUT", "--output=OUTPUT", String, :required, "Filename of the new domain definition") do |o|
+  opts.on("-oOUTPUT", "--output=OUTPUT", String, "Filename of the new domain definition") do |o|
     options[:output] = o
   end
 end.parse!
 
-if (options[:domain] == nil) then
+# retrieve domain name from first command line argument
+if ((options[:domain] = ARGV[0]) == nil) then
   puts "ERROR: The 'domain' has to be specified. Abort!"
   exit
 end
-
 
 # retrieve the current XML definition and create domain
 xml_str=''
