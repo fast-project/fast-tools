@@ -158,22 +158,18 @@ end
 # define command line options
 options = {}
 OptionParser.new do |opts|
-  opts.banner = "Usage: #{__FILE__} [options]"
+  opts.banner = "Usage: #{__FILE__} [options] <domain>"
 
-  opts.on("-dDOMAIN", "--domain=DOMAIN", String, "Name of the libvirt domain to be modified") do |d|
-    options[:domain] = d
+  opts.on("-cCPUs", "--cpus=x,y", Array, "A list of physical CPUs assigned to the VM") do |cpus|
+    options[:cpus] = cpus
   end
 
-  opts.on("-cCPUs", "--cpus=x,y", Array, "A list of physical CPUs assigned to the VM") do |c|
-    options[:cpus] = c
+  opts.on("-mMEMORY", "--memory=MEMORY", "Amount of memory assigned to the VM") do |memory|
+    options[:memory] = memory.to_i
   end
 
-  opts.on("-mMEMORY", "--memory=MEMORY", "Amount of memory assigned to the VM") do |m|
-    options[:memory] = m.to_i
-  end
-
-  opts.on("-oOUTPUT", "--output=OUTPUT", String, "Filename of the new domain definition") do |o|
-    options[:output] = o
+  opts.on("-oOUTPUT", "--output=OUTPUT", String, "Filename of the new domain definition") do |output|
+    options[:output] = output
   end
 end.parse!
 
