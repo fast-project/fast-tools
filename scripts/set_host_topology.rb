@@ -3,7 +3,7 @@
 require 'nokogiri'
 require 'optparse'
 
-HT_ORDER=2
+HT_ORDER=1
 
 class Host
   attr_accessor :cells
@@ -114,7 +114,7 @@ class Domain
     # create <topology> node
     topology = Nokogiri::XML::Node.new('topology', @xml)
     topology['sockets'] = @cells.length.to_s
-    topology['cores'] = @cells.max_by(&:length).length
+    topology['cores'] = @cells.max_by(&:length).length.to_s
     topology['threads'] = HT_ORDER
 
     # remove old nodes
