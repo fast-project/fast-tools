@@ -15,7 +15,6 @@ TIMER="date +%s%N | cut -b1-13"
 cmd="cat /sys/devices/system/cpu/present"
 pinning="0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31"
 guestmem=16384
-vcpus=8
 verbose=false
 shutdown=false
 
@@ -28,13 +27,12 @@ done
 DIR="$( cd -P "$( dirname "$SOURCE" )" && pwd )"
 
 function usage {
-    echo "usage: $PROGRAMNAME  --vm [--cmd] [--vcpus] [--guestmem] [-h]"
+    echo "usage: $PROGRAMNAME  --vm [--cmd] [--guestmem] [-h] [-v]"
     echo "	--vm		name of the VM"
-    echo "	--vcpus		VCPU count"
     echo "	--pinning	comma separated list of host CPUs for the pinning"
     echo "	--cmd		command to be executed"
     echo "	--guestmem	guest physical memory in MiB"
-    echo "	-v              be verbose"
+    echo "	-v/--verbose    be verbose"
     echo "	-h/--help	display help"
     exit 1
 }
@@ -102,6 +100,10 @@ function stop_domain () {
 	while [ $(date +%s) -lt $end_time ]; do
 		vm_running $domain || break
 	done
+	
+	# be sure domain is offline
+	sleep 1
+
 	dom_stop_time=$(($(eval $TIMER)-dom_stop_time))
 	
 	eval $verbose && echo "done"
@@ -159,7 +161,7 @@ function exec_cmd() {
 
 # determine options
 vm_count=0
-if ! options=$(getopt -o hv -l help,shutdown,verbose,vm:,cmd:,guestmem:,vcpus:,pinning: -- "$@")
+if ! options=$(getopt -o hv -l help,shutdown,verbose,vm:,cmd:,guestmem:,pinning: -- "$@")
 then
     exit 1
 fi
@@ -179,10 +181,6 @@ while [ $# -gt 0 ]; do
 		;;
 	--cmd) 
 		cmd="$2"
-		shift
-		;;
-	--vcpus) 
-		vcpus="$2"
 		shift
 		;;
 	--pinning) 
@@ -220,9 +218,6 @@ fi
 
 # prepare the VM
 stop_domain $vm
-#set_guestmem $vm $guestmem
-#set_vcpu $vm $vcpus
-#pin_vcpu $vm $vcpus $pinning
 $DIR/set_host_topology.rb --cpus=$pinning --output=${vm}_newdef.xml --memory=$guestmem $vm > /dev/null
 virsh define ${vm}_newdef.xml > /dev/null && rm ${vm}_newdef.xml
 
@@ -232,8 +227,6 @@ start_domain $vm
 # start benchmark
 exec_cmd $vm "$cmd"
 #
-## stop benchmark
-#stop_domain $vm
 
 # convert times to seconds
 dom_start_time=$(echo "scale=3;$dom_start_time/1000" | bc)
