@@ -14,6 +14,7 @@ TIMER="date +%s%N | cut -b1-13"
 # define default values
 cmd="cat /sys/devices/system/cpu/present"
 pinning="0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31"
+vcpus=8
 guestmem=16384
 verbose=false
 shutdown=false
@@ -161,7 +162,7 @@ function exec_cmd() {
 
 # determine options
 vm_count=0
-if ! options=$(getopt -o hv -l help,shutdown,verbose,vm:,cmd:,guestmem:,pinning: -- "$@")
+if ! options=$(getopt -o hv -l help,vcpus:,shutdown,verbose,vm:,cmd:,guestmem:,pinning: -- "$@")
 then
     exit 1
 fi
@@ -194,6 +195,10 @@ while [ $# -gt 0 ]; do
 	--shutdown) 
 		shutdown=true	
 		;;
+	--vcpus)
+		vcpus="$2"
+		shift
+		;;
 	(--) shift; break;;
 	(-*) echo "$0: error - unrecognized option $1" 1>&2; exit 1;;
 	(*) break;;
@@ -218,7 +223,7 @@ fi
 
 # prepare the VM
 stop_domain $vm
-$DIR/set_host_topology.rb --cpus=$pinning --output=${vm}_newdef.xml --memory=$guestmem $vm > /dev/null
+$DIR/set_host_topology.rb --cpucount=$vcpus --cpus=$pinning --output=${vm}_newdef.xml --memory=$guestmem $vm > /dev/null
 virsh define ${vm}_newdef.xml > /dev/null && rm ${vm}_newdef.xml
 
 # start the VM and perform pinning

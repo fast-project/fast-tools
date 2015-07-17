@@ -164,6 +164,10 @@ OptionParser.new do |opts|
     options[:cpus] = cpus
   end
 
+  opts.on("-vCPUCNT", "--cpucount=CPUCNT", "Amount of CPUs taken from the list") do |cpucnt|
+    options[:cpucnt] = cpucnt.to_i
+  end
+
   opts.on("-mMEMORY", "--memory=MEMORY", "Amount of memory assigned to the VM") do |memory|
     options[:memory] = memory.to_i
   end
@@ -194,8 +198,8 @@ end
 host = Host.new(xml_str)
 
 domain.set_memory(options[:memory])
-domain.set_vcpus(options[:cpus].length)
-domain.pin_vcpus(options[:cpus])
+domain.set_vcpus(options[:cpucnt])
+domain.pin_vcpus(options[:cpus].first(options[:cpucnt]))
 domain.adapt_host_topology(host)
 
 if (options[:output]) 
