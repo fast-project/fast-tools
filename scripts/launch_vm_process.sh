@@ -54,7 +54,8 @@ function start_domain () {
 	
 	# wait until online
 	echo -n "Wait until '$domain' reachable ... "
-	while ! nc -z $domain 22; do
+#	while ! nc -z $domain 22; do
+	while ! nmap -p 22 --open -sV $domain | grep "Host is up" > /dev/null; do
 		sleep 1
 	done
 	
@@ -195,18 +196,18 @@ $DIR/set_host_topology.rb --cpus=$pinning --output=${vm}_newdef.xml --memory=$gu
 virsh define ${vm}_newdef.xml && rm ${vm}_newdef.xml
 
 # start the VM and perform pinning
-dom_start_time=$(date+%s)
+dom_start_time=$(date +%s)
 start_domain $vm
-dom_start_time=$(($(date+%s)-dom_start_time))
+dom_start_time=$(($(date +%s)-dom_start_time))
 
 # start benchmark
-exec_time=$(date+%s)
+exec_time=$(date +%s)
 exec_cmd $vm "$cmd"
-exec_time=$(($(date+%s)-exec_time))
+exec_time=$(($(date +%s)-exec_time))
 #
 ## stop benchmark
-dom_stop_time=$(date+%s)
+dom_stop_time=$(date +%s)
 stop_domain $vm
-dom_stop_time=$(($(date+%s)-dom_stop_time))
+dom_stop_time=$(($(date +%s)-dom_stop_time))
 
-printf "%3.2d %3.2d %3.2d" "$dom_start_time" "$dom_stop_time" "$exec_time"
+printf "%3d %3d %3d\n" "$dom_start_time" "$dom_stop_time" "$exec_time"
