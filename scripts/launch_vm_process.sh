@@ -1,15 +1,22 @@
 #!/bin/bash
 
+# define timer vars
+dom_start_time=0
+dom_stop_time=0
+exec_time=0
+
 # define some constants
 PROGRAMNAME=$0
 SHUTDOWN_TIMEOUT=60
 SSHUSER=$USER
+TIMER="date +%s%N | cut -b1-13"
 
 # define default values
 cmd="cat /sys/devices/system/cpu/present"
 pinning="0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31"
 guestmem=16384
 vcpus=8
+verbose=false
 
 SOURCE="${BASH_SOURCE[0]}"
 while [ -h "$SOURCE" ]; do # resolve $SOURCE until the file is no longer a symlink
@@ -26,6 +33,7 @@ function usage {
     echo "	--pinning	comma separated list of host CPUs for the pinning"
     echo "	--cmd		command to be executed"
     echo "	--guestmem	guest physical memory in MiB"
+    echo "	-v              be verbose"
     echo "	-h/--help	display help"
     exit 1
 }
@@ -46,22 +54,33 @@ function vm_running () {
 
 function start_domain () {
 	domain=$1
-
-	# start domain
-	echo -n "Starting '$domain' ... "
-	virsh start $domain > /dev/null
-	echo "done"
 	
-	# wait until online
-	echo -n "Wait until '$domain' reachable ... "
-#	while ! nc -z $domain 22; do
-	while ! nmap -p 22 --open -sV $domain | grep "Host is up" > /dev/null; do
+	# check distribution
+	if cat /etc/*release |grep "SUSE Linux Enterprise Server 11" > /dev/null; then
+		test_cmd='nc -z $domain 22'
+	else
+		test_cmd='nmap -p 22 --open -sV $domain | grep "Host is up" > /dev/null'
+	fi
+	
+	# start domain
+	eval $verbose && echo -n "Starting '$domain' ... "
+
+	dom_start_time=$(eval $TIMER)
+	virsh start $domain > /dev/null
+	eval $verbose && echo "done"
+
+
+	# wait until online (do not start nc too early)
+	sleep 3 
+	eval $verbose && echo -n "Wait until '$domain' reachable ... "
+	while ! $(eval $test_cmd); do
 		sleep 1
 	done
+	dom_start_time=$(($(eval $TIMER)-dom_start_time))
 	
 	# be sure domain is online
-	sleep 1
-	echo "done"
+#	sleep 1
+	eval $verbose && echo "done"
 }
 
 function stop_domain () {
@@ -71,7 +90,8 @@ function stop_domain () {
 	running_domains=`list_running_domains`
 
 	# Try to shutdown given domain.
-	echo -n "Shutdown '$domain'  ... "
+	eval $verbose && echo -n "Shutdown '$domain'  ... "
+	dom_stop_time=$(eval $TIMER)
 	if vm_running $domain; then
 		virsh shutdown $domain > /dev/null
 	fi
@@ -80,33 +100,31 @@ function stop_domain () {
 	end_time=$(date -d "$SHUTDOWN_TIMEOUT seconds" +%s)
 	while [ $(date +%s) -lt $end_time ]; do
 		vm_running $domain || break
-		sleep 1
 	done
+	dom_stop_time=$(($(eval $TIMER)-dom_stop_time))
 	
-	# be sure domain is offline
-	sleep 1
-	echo "done"
+	eval $verbose && echo "done"
 }
 
 function set_vcpu () {
 	domain=$1
 	cpucount=$2
 	
-	echo -n "Set vcpus to '$cpucount' ... "
+	eval $verbose && echo -n "Set vcpus to '$cpucount' ... "
 	virsh setvcpus $domain --config --count $cpucount > /dev/null
-	echo "done"
+	eval $verbose && echo "done"
 }
 
 function set_guestmem () {
 	domain=$1
 	guestmem=$2
-	echo $guestmem
+	eval $verbose && echo $guestmem
 	let "guestmem *= 1024"
 	
-	echo -n "Set guestmem to '$(($guestmem/1024)) MiB' ... "
+	eval $verbose && echo -n "Set guestmem to '$(($guestmem/1024)) MiB' ... "
 	virsh setmaxmem $domain --config $guestmem > /dev/null
 	virsh setmem $domain --config $guestmem > /dev/null
-	echo "done"
+	eval $verbose && echo "done"
 }
 
 function pin_vcpu () {
@@ -120,25 +138,27 @@ function pin_vcpu () {
 	pinningAryLength=${#pinningAry[@]}
 	
 	# perform a 1-to-1 pinning
-	echo -n "Perform 1-to-1 pinning of VCPUs ... "
+	eval $verbose && echo -n "Perform 1-to-1 pinning of VCPUs ... "
 	for cpu in `seq 0 $maxvcpu`; do
 		aryPos=$((cpu % pinningAryLength))
 		virsh vcpupin $domain --config $cpu ${pinningAry[$aryPos]} > /dev/null
 	done
 	virsh emulatorpin $domain --config ${pinningAry[0]}-${pinningAry[$maxvcpu]} > /dev/null
-	echo "done"
+	eval $verbose && echo "done"
 }
 
 function exec_cmd() {
 	domain=$1
 	cmd=$2
-	echo "Executing '$cmd' ..."
+	eval $verbose && echo "Executing '$cmd' ..."
+	exec_time=$(eval $TIMER)
 	ssh $SSHUSER@$domain $cmd
+	exec_time=$(($(eval $TIMER)-exec_time))
 }
 
 # determine options
 vm_count=0
-if ! options=$(getopt -o h -l help,vm:,cmd:,guestmem:,vcpus:,pinning: -- "$@")
+if ! options=$(getopt -o hv -l help,verbose,vm:,cmd:,guestmem:,vcpus:,pinning: -- "$@")
 then
     exit 1
 fi
@@ -148,6 +168,10 @@ while [ $# -gt 0 ]; do
 	-h|--help) 
 		usage
 		exit
+		;;
+	-v|--verbose)
+		verbose=true
+		shift
 		;;
 	--vm)
 		vm="$2"
@@ -192,22 +216,21 @@ stop_domain $vm
 #set_guestmem $vm $guestmem
 #set_vcpu $vm $vcpus
 #pin_vcpu $vm $vcpus $pinning
-$DIR/set_host_topology.rb --cpus=$pinning --output=${vm}_newdef.xml --memory=$guestmem $vm
-virsh define ${vm}_newdef.xml && rm ${vm}_newdef.xml
+$DIR/set_host_topology.rb --cpus=$pinning --output=${vm}_newdef.xml --memory=$guestmem $vm > /dev/null
+virsh define ${vm}_newdef.xml > /dev/null && rm ${vm}_newdef.xml
 
 # start the VM and perform pinning
-dom_start_time=$(date +%s)
 start_domain $vm
-dom_start_time=$(($(date +%s)-dom_start_time))
 
 # start benchmark
-exec_time=$(date +%s)
 exec_cmd $vm "$cmd"
-exec_time=$(($(date +%s)-exec_time))
 #
 ## stop benchmark
-dom_stop_time=$(date +%s)
 stop_domain $vm
-dom_stop_time=$(($(date +%s)-dom_stop_time))
 
-printf "%3d %3d %3d\n" "$dom_start_time" "$dom_stop_time" "$exec_time"
+# convert times to seconds
+dom_start_time=$(echo "scale=3;$dom_start_time/1000" | bc)
+dom_stop_time=$(echo "scale=3;$dom_stop_time/1000" | bc)
+exec_time=$(echo "scale=3;$exec_time/1000" | bc)
+
+printf "%3.3f %3.3f %3.3f\n" "$dom_start_time" "$dom_stop_time" "$exec_time"
