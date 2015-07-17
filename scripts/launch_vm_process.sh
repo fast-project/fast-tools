@@ -17,6 +17,7 @@ pinning="0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,
 guestmem=16384
 vcpus=8
 verbose=false
+shutdown=false
 
 SOURCE="${BASH_SOURCE[0]}"
 while [ -h "$SOURCE" ]; do # resolve $SOURCE until the file is no longer a symlink
@@ -158,7 +159,7 @@ function exec_cmd() {
 
 # determine options
 vm_count=0
-if ! options=$(getopt -o hv -l help,verbose,vm:,cmd:,guestmem:,vcpus:,pinning: -- "$@")
+if ! options=$(getopt -o hv -l help,shutdown,verbose,vm:,cmd:,guestmem:,vcpus:,pinning: -- "$@")
 then
     exit 1
 fi
@@ -193,6 +194,10 @@ while [ $# -gt 0 ]; do
 		guestmem="$2"
 		shift
 		;;
+	--shutdown) 
+		shutdown=true	
+		shift
+		;;
 	(--) shift; break;;
 	(-*) echo "$0: error - unrecognized option $1" 1>&2; exit 1;;
 	(*) break;;
@@ -206,10 +211,14 @@ if [ -z ${vm+1} ]; then
 	exit
 fi
 
-# ensure *all* VMs are shut off
-#for vm in `list_running_domains`; do
-#	stop_domain $vm
-#done
+# do we only want to shutdown?
+if $(eval $shutdown); then
+	stop_domain $vm
+	
+	dom_stop_time=$(echo "scale=3;$dom_stop_time/1000" | bc)
+	printf "%3.3f\n" "$dom_stop_time"
+	exit
+fi
 
 # prepare the VM
 stop_domain $vm
@@ -226,11 +235,10 @@ start_domain $vm
 exec_cmd $vm "$cmd"
 #
 ## stop benchmark
-stop_domain $vm
+#stop_domain $vm
 
 # convert times to seconds
 dom_start_time=$(echo "scale=3;$dom_start_time/1000" | bc)
-dom_stop_time=$(echo "scale=3;$dom_stop_time/1000" | bc)
 exec_time=$(echo "scale=3;$exec_time/1000" | bc)
 
-printf "%3.3f %3.3f %3.3f\n" "$dom_start_time" "$dom_stop_time" "$exec_time"
+printf "%8.3f %8.3f\n" "$dom_start_time" "$exec_time"
