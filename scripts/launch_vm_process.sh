@@ -217,7 +217,7 @@ if $(eval $shutdown); then
 	stop_domain $vm
 	
 	dom_stop_time=$(echo "scale=3;$dom_stop_time/1000" | bc)
-	printf "%3.3f\n" "$dom_stop_time"
+	echo $dom_stop_time
 	exit
 fi
 
@@ -237,4 +237,4 @@ exec_cmd $vm "$cmd"
 dom_start_time=$(echo "scale=3;$dom_start_time/1000" | bc)
 exec_time=$(echo "scale=3;$exec_time/1000" | bc)
 
-printf "%8.3f %8.3f\n" "$dom_start_time" "$exec_time"
+echo -e "$dom_start_time\t\t$exec_time"
