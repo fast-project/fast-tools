@@ -3,13 +3,21 @@
 # define some constants
 PROGRAMNAME=$0
 SHUTDOWN_TIMEOUT=60
-SSHUSER='dummy'
+SSHUSER=$USER
 
 # define default values
 cmd="cat /sys/devices/system/cpu/present"
 pinning="0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31"
 guestmem=16384
 vcpus=8
+
+SOURCE="${BASH_SOURCE[0]}"
+while [ -h "$SOURCE" ]; do # resolve $SOURCE until the file is no longer a symlink
+  DIR="$( cd -P "$( dirname "$SOURCE" )" && pwd )"
+  SOURCE="$(readlink "$SOURCE")"
+  [[ $SOURCE != /* ]] && SOURCE="$DIR/$SOURCE" # if $SOURCE was a relative symlink, we need to resolve it relative to the path where the symlink file was located
+done
+DIR="$( cd -P "$( dirname "$SOURCE" )" && pwd )"
 
 function usage {
     echo "usage: $PROGRAMNAME  --vm [--cmd] [--vcpus] [--guestmem] [-h]"
@@ -183,14 +191,14 @@ stop_domain $vm
 #set_guestmem $vm $guestmem
 #set_vcpu $vm $vcpus
 #pin_vcpu $vm $vcpus $pinning
-./set_host_topology.rb --cpus=$pinning --output=${vm}_newdef.xml --memory=$guestmem $vm
+$DIR/set_host_topology.rb --cpus=$pinning --output=${vm}_newdef.xml --memory=$guestmem $vm
 virsh define ${vm}_newdef.xml && rm ${vm}_newdef.xml
 
 # start the VM and perform pinning
 start_domain $vm
 
 # start benchmark
-#exec_cmd $vm "$cmd"
+exec_cmd $vm "$cmd"
 #
 ## stop benchmark
 #stop_domain $vm
