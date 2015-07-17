@@ -172,7 +172,6 @@ while [ $# -gt 0 ]; do
 		;;
 	-v|--verbose)
 		verbose=true
-		shift
 		;;
 	--vm)
 		vm="$2"
@@ -196,7 +195,6 @@ while [ $# -gt 0 ]; do
 		;;
 	--shutdown) 
 		shutdown=true	
-		shift
 		;;
 	(--) shift; break;;
 	(-*) echo "$0: error - unrecognized option $1" 1>&2; exit 1;;
