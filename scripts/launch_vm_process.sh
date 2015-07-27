@@ -33,6 +33,7 @@ function usage {
     echo "	--pinning	comma separated list of host CPUs for the pinning"
     echo "	--cmd		command to be executed"
     echo "	--guestmem	guest physical memory in MiB"
+    echo "	--vcpus		amount of virtual CPUs"
     echo "	-v/--verbose    be verbose"
     echo "	-h/--help	display help"
     exit 1
