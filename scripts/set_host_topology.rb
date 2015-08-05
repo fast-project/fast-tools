@@ -69,9 +69,8 @@ class Domain
   
   def pin_vcpus(cpus)
     # retrieve relevant XML part 
+    @xml.at_css("domain").add_child(Nokogiri::XML::Node.new 'cputune', @xml) unless @xml.at_css("cputune")
     cputune = @xml.at_css("cputune")
-    text_content=cputune.children.first.content
-    last_text_content=cputune.children.last.content
     cputune.children.remove
 
     # create VCPUs
@@ -79,13 +78,11 @@ class Domain
 
     # update XML
     @vcpus.each do |vcpu|
-      cputune.add_child(Nokogiri::XML::Text.new text_content, @xml)
       child = Nokogiri::XML::Node.new('vcpupin', @xml)
       child['vcpu'] = "#{vcpu.id}"
       child['cpuset'] = "#{vcpu.phys_cpu}"
       cputune.add_child(child)
     end
-    cputune.add_child(Nokogiri::XML::Text.new last_text_content, @xml)
   end
 
   def set_memory(memory)
@@ -103,19 +100,19 @@ class Domain
 
     # create <numa> node from XML
     numa = Nokogiri::XML::Node.new('numa', @xml)
-    @cells.each_with_index do |cell, index|
+    @cells.each_with_index do |(phys_socket_id, cell), index|
       new_cell = Nokogiri::XML::Node.new('cell', @xml)
       new_cell['id'] = index.to_s
       new_cell['cpus'] = cell.join(",")
-      new_cell['memory'] = (memory.size/@cells.length).to_i
+      new_cell['memory'] = (memory.size/@cells.values.length).to_i
       new_cell['unit'] = memory.unit
       numa.add_child(new_cell)
     end 
 
     # create <topology> node
     topology = Nokogiri::XML::Node.new('topology', @xml)
-    topology['sockets'] = @cells.length.to_s
-    topology['cores'] = @cells.max_by(&:length).length.to_s
+    topology['sockets'] = @cells.values.length.to_s
+    topology['cores'] = @cells.values.max_by(&:length).length.to_s
     topology['threads'] = HT_ORDER
 
     # remove old nodes
@@ -130,11 +127,11 @@ class Domain
 
     # create <numatune> node
     numatune = Nokogiri::XML::Node.new('numatune', @xml)
-     @cells.each_with_index do |cell, index|
+    @cells.each_with_index do |(phys_socket_id, cell), index|
       new_cell = Nokogiri::XML::Node.new('memnode', @xml)
       new_cell['cellid'] = index.to_s
       new_cell['mode'] = 'strict'
-      new_cell['nodeset'] = index.to_s
+      new_cell['nodeset'] = phys_socket_id.to_s
       numatune.add_child(new_cell)
     end
 
@@ -162,10 +159,13 @@ class Domain
     end
 
     # define cells
-    @cells = []
+    @cells = {}
     host.cells.each_with_index do |cell, index|
       cur_socket = @vcpus.select { |vcpu| vcpu.socket == index }.map { |vcpu| vcpu.id }
-      @cells << cur_socket unless cur_socket.empty?
+      unless cur_socket.empty?
+        phys_socket_id =  @vcpus.select { |vcpu| vcpu.id == cur_socket[0] }[0].socket
+        @cells[phys_socket_id] = cur_socket 
+      end
     end
   end
 end
