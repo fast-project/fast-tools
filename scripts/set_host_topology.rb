@@ -105,7 +105,7 @@ class Domain
     numa = Nokogiri::XML::Node.new('numa', @xml)
     @cells.each_with_index do |cell, index|
       new_cell = Nokogiri::XML::Node.new('cell', @xml)
-      new_cell['id'] = index.to_s 
+      new_cell['id'] = index.to_s
       new_cell['cpus'] = cell.join(",")
       new_cell['memory'] = (memory.size/@cells.length).to_i
       new_cell['unit'] = memory.unit
@@ -121,11 +121,26 @@ class Domain
     # remove old nodes
     @xml.css("numa").remove
     @xml.css("topology").remove
+    @xml.css("numatune").remove
 
     # add <numa> and <topology> node to <cpu> node
     cpu = @xml.at_css("cpu")
     cpu.add_child(numa)
     cpu.add_child(topology)
+
+    # create <numatune> node
+    numatune = Nokogiri::XML::Node.new('numatune', @xml)
+     @cells.each_with_index do |cell, index|
+      new_cell = Nokogiri::XML::Node.new('memnode', @xml)
+      new_cell['cellid'] = index.to_s
+      new_cell['mode'] = 'strict'
+      new_cell['nodeset'] = index.to_s
+      numatune.add_child(new_cell)
+    end
+
+    # add <numatune> node to <domain> node
+    domain = @xml.at_css("domain")
+    domain.add_child(numatune)
   end
 
   private

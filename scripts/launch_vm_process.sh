@@ -33,6 +33,7 @@ function usage {
     echo "	--pinning	comma separated list of host CPUs for the pinning"
     echo "	--cmd		command to be executed"
     echo "	--guestmem	guest physical memory in MiB"
+    echo "	--vcpus		amount of virtual CPUs"
     echo "	-v/--verbose    be verbose"
     echo "	-h/--help	display help"
     exit 1
@@ -237,4 +238,4 @@ exec_cmd $vm "$cmd"
 dom_start_time=$(echo "scale=3;$dom_start_time/1000" | bc)
 exec_time=$(echo "scale=3;$exec_time/1000" | bc)
 
-echo -e "$dom_start_time\t\t$exec_time"
+echo -e "$dom_start_time"
