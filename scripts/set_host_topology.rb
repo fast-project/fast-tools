@@ -19,6 +19,7 @@ class Host
     @xml.css('cpus').each do |cell|
       cur_cell = []
       cell.children.each do |cpu|
+        next unless cpu.to_s[0].eql?("<") # TODO: dirty hack, can we do it better?
         cur_cell << cpu.attributes['id'].to_s.to_i if cpu.attributes['id'].instance_of?(Nokogiri::XML::Attr)
       end
       @cells << cur_cell
@@ -195,6 +196,7 @@ IO.popen("virsh capabilities", "r+") do |pipe|
   pipe.close_write
   xml_str=pipe.read
 end
+
 host = Host.new(xml_str)
 
 domain.set_memory(options[:memory])
