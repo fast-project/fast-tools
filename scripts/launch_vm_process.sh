@@ -163,7 +163,7 @@ function exec_cmd() {
 
 # determine options
 vm_count=0
-if ! options=$(getopt -o hv -l help,vcpus:,shutdown,verbose,vm:,cmd:,guestmem:,pinning: -- "$@")
+if ! options=$(getopt -o hv -l help,vcpus:,ht:,shutdown,verbose,vm:,cmd:,guestmem:,pinning: -- "$@")
 then
     exit 1
 fi
@@ -200,6 +200,10 @@ while [ $# -gt 0 ]; do
 		vcpus="$2"
 		shift
 		;;
+	--ht)
+		ht="$2"
+		shift
+		;;
 	(--) shift; break;;
 	(-*) echo "$0: error - unrecognized option $1" 1>&2; exit 1;;
 	(*) break;;
@@ -211,6 +215,9 @@ done
 if [ -z ${vm+1} ]; then
 	echo "ERROR: You have to specify at least the VM you want to use. Abort!"
 	exit
+fi
+if [ -z ${ht+1} ]; then
+	ht=1
 fi
 
 # do we only want to shutdown?
@@ -224,7 +231,7 @@ fi
 
 # prepare the VM
 stop_domain $vm
-$DIR/set_host_topology.rb --cpucount=$vcpus --cpus=$pinning --output=${vm}_newdef.xml --memory=$guestmem $vm > /dev/null
+$DIR/set_host_topology.rb --cpucount=$vcpus --cpus=$pinning --output=${vm}_newdef.xml --memory=$guestmem --hyper-threading=$ht $vm > /dev/null
 virsh define ${vm}_newdef.xml > /dev/null && rm ${vm}_newdef.xml
 
 # start the VM and perform pinning
@@ -232,7 +239,7 @@ start_domain $vm
 
 # start benchmark
 exec_cmd $vm "$cmd"
-#
+
 
 # convert times to seconds
 dom_start_time=$(echo "scale=3;$dom_start_time/1000" | bc)
