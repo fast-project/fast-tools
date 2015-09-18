@@ -3,8 +3,6 @@
 require 'nokogiri'
 require 'optparse'
 
-HT_ORDER=1
-
 class Host
   attr_accessor :cells
 
@@ -92,7 +90,7 @@ class Domain
     end
   end
 
-  def adapt_host_topology(host)
+  def adapt_host_topology(host, ht)
     determine_sockets(host)
 
     # get Domain's memory info
@@ -113,7 +111,7 @@ class Domain
     topology = Nokogiri::XML::Node.new('topology', @xml)
     topology['sockets'] = @cells.values.length.to_s
     topology['cores'] = @cells.values.max_by(&:length).length.to_s
-    topology['threads'] = HT_ORDER
+    topology['threads'] = ht
 
     # remove old nodes
     @xml.css("numa").remove
@@ -173,6 +171,8 @@ end
 
 # define command line options
 options = {}
+options[:ht] = 1
+
 OptionParser.new do |opts|
   opts.banner = "Usage: #{__FILE__} [options] <domain>"
 
@@ -190,6 +190,10 @@ OptionParser.new do |opts|
 
   opts.on("-oOUTPUT", "--output=OUTPUT", String, "Filename of the new domain definition") do |output|
     options[:output] = output
+  end
+  
+  opts.on("-hORDER", "--hyper-threading=ORDER", "Enable Hyperthreading with ORDER") do |ht_order|
+    options[:ht] = ht_order
   end
 end.parse!
 
@@ -217,7 +221,7 @@ host = Host.new(xml_str)
 domain.set_memory(options[:memory])
 domain.set_vcpus(options[:cpucnt])
 domain.pin_vcpus(options[:cpus].first(options[:cpucnt]))
-domain.adapt_host_topology(host)
+domain.adapt_host_topology(host, options[:ht])
 
 if (options[:output]) 
   File.write(options[:output], domain.to_s)
