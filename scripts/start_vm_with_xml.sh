@@ -1,7 +1,5 @@
 #!/bin/bash
 
-verbose=false
-
 # define timer vars
 dom_start_time=0
 dom_stop_time=0
