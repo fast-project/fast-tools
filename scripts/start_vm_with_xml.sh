@@ -1,5 +1,7 @@
 #!/bin/bash
 
+verbose=false
+
 # define timer vars
 dom_start_time=0
 dom_stop_time=0
@@ -22,7 +24,7 @@ function usage {
 }
 
 function list_running_domains {
-	virsh list | grep running | awk '{ printf "%s ", $2 }'
+	virsh -c qemu+ssh://${host}/system list | grep running | awk '{ printf "%s ", $2 }'
 }
 
 function vm_running () {
@@ -51,7 +53,7 @@ function start_domain () {
 	eval $verbose && echo -n "Starting '$domain' ... "
 
 	dom_start_time=$(eval $TIMER)
-	virsh start $domain > /dev/null
+	virsh -c qemu+ssh://${host}/system start $domain > /dev/null
 	eval $verbose && echo "done"
 
 
@@ -70,6 +72,7 @@ function start_domain () {
 
 vm=$1
 xml=$2
+host=$3
 
 # check parameters
 if [ -z ${vm+1} ]; then
@@ -78,11 +81,13 @@ if [ -z ${vm+1} ]; then
 elif [ -z ${xml+1} ]; then
 	echo "ERROR: You have to specify the XML you want to use. Abort!"
 	exit
+elif [ -z ${host+1} ]; then
+	host=localhost
 fi
 
 # prepare the VM
-virsh destroy $vm &> /dev/null
-virsh define ${xml} > /dev/null
+virsh -c qemu+ssh://${host}/system destroy $vm &> /dev/null
+virsh -c qemu+ssh://${host}/system define ${xml} > /dev/null
 
 # start the VM and perform pinning
 start_domain $vm
