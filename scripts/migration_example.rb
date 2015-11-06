@@ -5,9 +5,12 @@ require 'thwait'
 
 # benchmark configuration
 PROC_QUEUE=["app0", "app1", "app2"]
-VMS={
-  PROC_QUEUE[0] => ["centos7110", "centos7111"],
-  PROC_QUEUE[1] => ["centos7112", "centos7113"]
+
+DOMAIN_LOCATIONS={
+  "centos7110" => "pandora3",
+  "centos7111" => "pandora3",
+  "centos7112" => "pandora4",
+  "centos7113" => "pandora4",
 }
 MIGRATIONS={
   "centos7111" => {source: "pandora3", dest: "pandora4"},
@@ -27,8 +30,8 @@ OptionParser.new do |opts|
 end.parse!
 
 # start all VMs
-VMS.values.flatten.each do |vm|
-  puts "`#{Dir.pwd}/start_vm_with_xml.sh #{vm}.xml`"
+DOMAIN_LOCATIONS.each do |vm, location|
+  puts "`#{Dir.pwd}/start_vm_with_xml.sh #{vm} #{vm}.xml #{location}`"
 end
 
 
@@ -39,15 +42,14 @@ running_jobs << Thread.new { puts `#{Dir.pwd}/#{PROC_QUEUE[1]}` }
 
 # wait for first Job to terminate
 ready_job = ThreadsWait.new(running_jobs).next_wait
-puts running_jobs
 running_jobs.delete(ready_job)
-puts running_jobs
 ready_job.join
 
 # migrate in accordance with the configuration
 migrate_jobs = []
 MIGRATIONS.each do |vm, config|
   migrate_jobs << Thread.new { puts "`#{Dir.pwd}/migrate_vm.sh #{vm} #{config[:source]} #{config[:dest]}`" }
+  DOMAIN_LOCATIONS[vm] = config[:dest]
 end
 ThreadsWait.all_waits(migrate_jobs)
 
@@ -57,3 +59,10 @@ running_jobs << Thread.new { puts `#{Dir.pwd}/#{PROC_QUEUE[2]}` }
 running_jobs.each do |job|
   job.join
 end
+
+# stop all VMs
+DOMAIN_LOCATIONS.each do |vm, location|
+  puts "`#{Dir.pwd}/stop_vm.sh #{vm} #{vm}.xml #{location}`"
+end
+
+
