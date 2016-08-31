@@ -110,7 +110,7 @@ class Domain
     # create <topology> node
     topology = Nokogiri::XML::Node.new('topology', @xml)
     topology['sockets'] = @cells.values.length.to_s
-    topology['cores'] = @cells.values.max_by(&:length).length.to_s
+    topology['cores'] = ((@cells.values.max_by(&:length).length)/ht.to_i).to_i.to_s
     topology['threads'] = ht
 
     # remove old nodes
