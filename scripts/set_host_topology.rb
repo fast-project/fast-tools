@@ -195,19 +195,28 @@ OptionParser.new do |opts|
   opts.on("-hORDER", "--hyper-threading=ORDER", "Enable Hyperthreading with ORDER") do |ht_order|
     options[:ht] = ht_order
   end
+
+  opts.on("-xXML", "--current-xml=XML", "Current XML string") do |xml|
+    options[:xml] = xml 
+  end
 end.parse!
 
-# retrieve domain name from first command line argument
-if ((options[:domain] = ARGV[0]) == nil) then
-  puts "ERROR: The 'domain' has to be specified. Abort!"
-  exit
-end
-
 # retrieve the current XML definition and create domain
-xml_str=''
-IO.popen("virsh dumpxml #{options[:domain]}", "r+") do |pipe|
-  pipe.close_write
-  xml_str=pipe.read
+file_name=options[:xml]
+if (file_name == nil) then
+  # retrieve domain name from first command line argument
+  if ((options[:domain] = ARGV[0]) == nil) then
+    puts "ERROR: The 'domain' has to be specified. Abort!"
+    exit
+  end
+
+  xml_str = ''
+  IO.popen("virsh dumpxml #{options[:domain]}", "r+") do |pipe|
+    pipe.close_write
+    xml_str=pipe.read
+  end
+else 
+  xml_str = IO.read(file_name)
 end
 domain = Domain.new(xml_str)
 
